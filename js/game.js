@@ -16,6 +16,9 @@ const Game = {
     lastX: 0,
     lastY: 0,
     
+    // Animation loop
+    animationFrameId: null,
+    
     // Initialize game
     init() {
         if (this.initialized) return;
@@ -35,9 +38,9 @@ const Game = {
         this.gameCanvas.height = container.offsetHeight;
         
         // Initialize systems
+        CakeRenderer.init(this.gameCanvas);
         FrostingSystem.init(this.gameCanvas);
         DecorationSystem.init();
-        CakeRenderer.init(this.gameCanvas);
         
         // Setup input handlers
         this.setupInputHandlers();
@@ -45,8 +48,28 @@ const Game = {
         // Setup UI
         UI.init(document.getElementById('game-root'));
         
+        // Start render loop
+        this.startRenderLoop();
+        
         this.initialized = true;
         console.log('Game initialized successfully');
+    },
+    
+    // Start render loop
+    startRenderLoop() {
+        const loop = () => {
+            this.render();
+            this.animationFrameId = requestAnimationFrame(loop);
+        };
+        this.animationFrameId = requestAnimationFrame(loop);
+    },
+    
+    // Stop render loop
+    stopRenderLoop() {
+        if (this.animationFrameId) {
+            cancelAnimationFrame(this.animationFrameId);
+            this.animationFrameId = null;
+        }
     },
     
     // Setup input handlers for mouse and touch
@@ -89,6 +112,9 @@ const Game = {
             GameState.saveState();
             FrostingSystem.startDrawing(x, y);
             this.isDragging = true;
+        } else if (GameState.selectedTool === 'decoration' && GameState.selectedDecoration) {
+            // Place decoration
+            this.placeDecoration(x, y);
         }
     },
     
@@ -105,16 +131,13 @@ const Game = {
         if (this.draggedDecoration) {
             // Move decoration
             DecorationSystem.move(this.draggedDecoration.id, x, y);
-        } else if (GameState.selectedTool === 'frosting') {
+        } else if (GameState.selectedTool === 'frosting' && FrostingSystem.isDrawing) {
             // Draw frosting
             FrostingSystem.draw(x, y);
         }
         
         this.lastX = x;
         this.lastY = y;
-        
-        // Redraw
-        this.render();
     },
     
     // Handle pointer up (mouse/touch end)
@@ -130,8 +153,10 @@ const Game = {
     
     // Render game
     render() {
+        if (!this.gameCanvas || !this.gameCtx) return;
+        
         // Clear canvas
-        this.gameCtx.fillStyle = 'rgba(252, 231, 243, 0.1)';
+        this.gameCtx.fillStyle = 'rgba(255, 250, 240, 0.3)';
         this.gameCtx.fillRect(0, 0, this.gameCanvas.width, this.gameCanvas.height);
         
         // Draw cake
@@ -171,6 +196,9 @@ const Game = {
         // Show game screen
         UI.showScreen('game');
         
+        // Set default tool
+        GameState.selectedTool = 'frosting';
+        
         // Initial render
         this.render();
     },
@@ -181,6 +209,7 @@ const Game = {
         FrostingSystem.setStyle(style);
         GameState.selectedTool = 'frosting';
         UI.selectFrostingButton(style);
+        console.log('Frosting style selected:', style);
     },
     
     // Select decoration
@@ -189,6 +218,7 @@ const Game = {
         GameState.selectedDecoration = type;
         DecorationSystem.select(type);
         UI.selectDecorationButton(type);
+        console.log('Decoration selected:', type);
     },
     
     // Place decoration on canvas click
@@ -200,7 +230,7 @@ const Game = {
         
         if (deco) {
             GameState.playerCake.decorations.push(deco);
-            this.render();
+            console.log('Decoration placed:', GameState.selectedDecoration);
         }
     },
     
@@ -218,7 +248,7 @@ const Game = {
                 DecorationSystem.set(GameState.playerCake.decorations);
             }
             
-            this.render();
+            console.log('Undo performed');
         }
     },
     
@@ -229,6 +259,9 @@ const Game = {
         // Save final state
         GameState.playerCake.frostingPaths = FrostingSystem.getPaths();
         GameState.playerCake.decorations = DecorationSystem.getAll();
+        
+        console.log('Player cake:', GameState.playerCake);
+        console.log('Challenge:', GameState.currentChallenge);
         
         // Calculate score
         const score = ScoringSystem.calculateScore(
@@ -247,6 +280,8 @@ const Game = {
             GameState.currentChallenge,
             GameState.playerCake
         );
+        
+        console.log('Score:', score, 'Breakdown:', breakdown);
         
         // Show result
         UI.showResult(score, feedback, breakdown);
