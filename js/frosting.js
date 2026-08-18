@@ -1,9 +1,9 @@
 /* ==================================================
-   FROSTING/CREAM SYSTEM
+   FROSTING/CREAM SYSTEM - FIXED
 ================================================== */
 
 const FrostingSystem = {
-    // Canvas context and state
+    // Canvas context (shared from main game)
     ctx: null,
     canvas: null,
     isDrawing: false,
@@ -18,9 +18,9 @@ const FrostingSystem = {
     pressure: 1,
     
     // Initialize frosting system
-    init(canvas) {
+    init(canvas, ctx) {
         this.canvas = canvas;
-        this.ctx = canvas.getContext('2d');
+        this.ctx = ctx; // Use shared context from Game
         this.frostingPaths = [];
     },
     
@@ -77,6 +77,8 @@ const FrostingSystem = {
     
     // Render all frosting paths
     render() {
+        if (!this.ctx) return;
+        
         this.frostingPaths.forEach(path => {
             this.renderPath(path);
         });
@@ -84,7 +86,7 @@ const FrostingSystem = {
     
     // Render a single frosting path
     renderPath(path) {
-        if (path.points.length < 2) return;
+        if (!this.ctx || path.points.length < 2) return;
         
         switch (path.style) {
             case 'smooth':

@@ -1,8 +1,12 @@
 /* ==================================================
-   DECORATION SYSTEM
+   DECORATION SYSTEM - FIXED
 ================================================== */
 
 const DecorationSystem = {
+    // Canvas context (shared from main game)
+    ctx: null,
+    canvas: null,
+    
     // All available decorations with SVG definitions
     decorations: {
         strawberry: {
@@ -306,9 +310,12 @@ const DecorationSystem = {
     // Current selected decoration
     selectedDecoration: null,
     placedDecorations: [],
+    selectedDecorationId: null,
     
     // Initialize system
-    init() {
+    init(canvas, ctx) {
+        this.canvas = canvas;
+        this.ctx = ctx; // Use shared context from Game
         this.placedDecorations = [];
     },
     
@@ -344,7 +351,7 @@ const DecorationSystem = {
     },
     
     // Get decoration at position (for selection)
-    getDecorationAt(x, y, radius = 15) {
+    getDecorationAt(x, y, radius = 20) {
         for (let i = this.placedDecorations.length - 1; i >= 0; i--) {
             const deco = this.placedDecorations[i];
             const dist = Math.sqrt((deco.x - x) ** 2 + (deco.y - y) ** 2);
@@ -372,8 +379,11 @@ const DecorationSystem = {
         }
     },
     
-    // Render all decorations
+    // Render all decorations using shared context
     render(ctx) {
+        if (!ctx) ctx = this.ctx;
+        if (!ctx) return;
+        
         this.placedDecorations.forEach(deco => {
             ctx.save();
             ctx.translate(deco.x, deco.y);

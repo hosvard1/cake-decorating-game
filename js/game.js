@@ -1,5 +1,5 @@
 /* ==================================================
-   MAIN GAME ENGINE
+   MAIN GAME ENGINE - COMPLETE REFACTOR
 ================================================== */
 
 const Game = {
@@ -7,8 +7,6 @@ const Game = {
     initialized: false,
     gameCanvas: null,
     gameCtx: null,
-    targetPreviewCanvas: null,
-    targetPreviewCtx: null,
     
     // Input tracking
     isDragging: false,
@@ -37,10 +35,10 @@ const Game = {
         this.gameCanvas.width = container.offsetWidth;
         this.gameCanvas.height = container.offsetHeight;
         
-        // Initialize systems
+        // Initialize systems with shared context
         CakeRenderer.init(this.gameCanvas);
-        FrostingSystem.init(this.gameCanvas);
-        DecorationSystem.init();
+        FrostingSystem.init(this.gameCanvas, this.gameCtx);
+        DecorationSystem.init(this.gameCanvas, this.gameCtx);
         
         // Setup input handlers
         this.setupInputHandlers();
@@ -93,8 +91,6 @@ const Game = {
     
     // Handle pointer down (mouse/touch start)
     handlePointerDown(e) {
-        e.preventDefault();
-        
         const rect = this.gameCanvas.getBoundingClientRect();
         const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
         const y = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
@@ -102,19 +98,26 @@ const Game = {
         this.lastX = x;
         this.lastY = y;
         
-        // Check if clicked on a decoration
+        // Check if clicked on a decoration (dragging)
         const deco = DecorationSystem.getDecorationAt(x, y);
         if (deco) {
             this.draggedDecoration = deco;
             this.isDragging = true;
-        } else if (GameState.selectedTool === 'frosting') {
-            // Start frosting
+            e.preventDefault();
+            return;
+        }
+        
+        // If frosting is selected, start drawing
+        if (GameState.selectedTool === 'frosting') {
             GameState.saveState();
             FrostingSystem.startDrawing(x, y);
             this.isDragging = true;
-        } else if (GameState.selectedTool === 'decoration' && GameState.selectedDecoration) {
-            // Place decoration
+            e.preventDefault();
+        }
+        // If decoration is selected, place it
+        else if (GameState.selectedTool === 'decoration' && GameState.selectedDecoration) {
             this.placeDecoration(x, y);
+            e.preventDefault();
         }
     },
     
@@ -155,17 +158,17 @@ const Game = {
     render() {
         if (!this.gameCanvas || !this.gameCtx) return;
         
-        // Clear canvas
+        // Clear canvas with light background
         this.gameCtx.fillStyle = 'rgba(255, 250, 240, 0.3)';
         this.gameCtx.fillRect(0, 0, this.gameCanvas.width, this.gameCanvas.height);
         
-        // Draw cake
+        // Draw cake (this also includes default frosting if no paths exist)
         CakeRenderer.drawCake(GameState.playerCake);
         
-        // Draw frosting
+        // Draw all frosting paths
         FrostingSystem.render();
         
-        // Draw decorations
+        // Draw all decorations
         DecorationSystem.render(this.gameCtx);
     },
     
@@ -185,8 +188,11 @@ const Game = {
         // Setup player cake from challenge
         GameState.playerCake.shape = GameState.currentChallenge.cakeShape;
         GameState.playerCake.layers = GameState.currentChallenge.layers;
+        GameState.playerCake.cakeColor = GameState.currentChallenge.cakeColor;
         GameState.playerCake.creamColor = GameState.currentChallenge.creamColor;
         GameState.playerCake.frostingStyle = GameState.currentChallenge.frostingStyle;
+        GameState.playerCake.frostingPaths = [];
+        GameState.playerCake.decorations = [];
         
         // Update UI
         UI.updateLevelDisplay(GameState.currentLevel);
@@ -198,8 +204,9 @@ const Game = {
         
         // Set default tool
         GameState.selectedTool = 'frosting';
+        GameState.selectedDecoration = null;
         
-        // Initial render
+        // Force immediate render
         this.render();
     },
     
@@ -207,7 +214,9 @@ const Game = {
     selectFrosting(style) {
         GameState.playerCake.frostingStyle = style;
         FrostingSystem.setStyle(style);
+        FrostingSystem.setColor(GameState.playerCake.creamColor);
         GameState.selectedTool = 'frosting';
+        GameState.selectedDecoration = null;
         UI.selectFrostingButton(style);
         console.log('Frosting style selected:', style);
     },
@@ -230,16 +239,18 @@ const Game = {
         
         if (deco) {
             GameState.playerCake.decorations.push(deco);
-            console.log('Decoration placed:', GameState.selectedDecoration);
+            console.log('Decoration placed:', GameState.selectedDecoration, 'at', x, y);
         }
     },
     
     // Undo last action
     undo() {
         if (GameState.undo()) {
+            // Clear current state
             FrostingSystem.clear();
             DecorationSystem.clear();
             
+            // Restore from saved state
             if (GameState.playerCake.frostingPaths) {
                 FrostingSystem.setPaths(GameState.playerCake.frostingPaths);
             }
